@@ -1,6 +1,6 @@
 package greycat.bench;
 
-public class SplitBaseGraphGenerator implements GraphGenerator{
+public class SplitBaseGraphGenerator implements GraphGenerator {
 
     private final int _nbNodes;
     private final int _nbSplit;
@@ -9,6 +9,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator{
     private final int _numberOfNodesToChange;
     private final int _maxCase;
     private final int _sizeArray;
+    private final int _percentageOfModification;
     private int _nbInsert;
     private int _currentTimestamp = 0;
 
@@ -32,6 +33,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator{
         this._nbSplit = nbSplit;
         this._numberOfModification = numberOfModification;
         this._startPositionOfModification = startPositionOfModification;
+        this._percentageOfModification = percentageOfModification;
 
         //computed Information
         this._numberOfNodesToChange = percentageOfModification * nbNodes / 100;
@@ -134,6 +136,11 @@ public class SplitBaseGraphGenerator implements GraphGenerator{
      * }
      * }
      */
+
+    @Override
+    public String toString() {
+        return _nbNodes + "_" + _percentageOfModification + "_" + _nbSplit + "_" + _numberOfModification + "_" + _startPositionOfModification;
+    }
 
     public static Operations atTimestampDo(int timeStamp, int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification) {
         boolean insert;
