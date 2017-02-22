@@ -13,7 +13,7 @@
         <greycat.version>3-SNAPSHOT</greycat.version>
         <header.path>${basedir}/HEADER</header.path>
     </properties>
-    
+
     <dependencies>
         <dependency>
             <groupId>com.datathings</groupId>
@@ -34,7 +34,6 @@
 
     <build>
         <plugins>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -60,8 +59,16 @@
                     </dependency>
                 </dependencies>
             </plugin>
-
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.5.0</version>
+                <configuration>
+                    <mainClass>greycat.bench.GreycatGraph</mainClass>
+                </configuration>
+            </plugin>
+
+            <!--<plugin>
                 <groupId>com.mycila</groupId>
                 <artifactId>license-maven-plugin</artifactId>
                 <version>3.0</version>
@@ -93,7 +100,7 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
+            </plugin>-->
         </plugins>
     </build>
 </project>

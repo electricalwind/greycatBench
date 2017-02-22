@@ -70,50 +70,60 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
                     listOfNodes[i] = timeStamp * 10 + i;
             }
         } else {
+
             if (_numberOfNodesToChange == 0) return null;
             insert = false;
 
             int modificationStatus = (timeStamp - _nbInsert) / _nbSplit;
             if (modificationStatus > _numberOfModification) return null;
 
-            int splitNumber = (timeStamp - _nbInsert) % _nbSplit;
-
-            if (splitNumber < _numberOfNodesToChange % _nbSplit) {
-                listOfNodes = new int[_sizeArray + 1];
-                listOfNodes[_sizeArray] = _startPositionOfModification + _numberOfNodesToChange - splitNumber - 1;
-            } else {
+            if (_nbSplit == 1) {
                 listOfNodes = new int[_sizeArray];
-            }
-
-            int cas = modificationStatus % _maxCase + 1;
-
-            int subsize = 0;
-            int nodeToAdd = _startPositionOfModification + splitNumber * cas;
-
-            int startOfProblem  = _numberOfNodesToChange / (cas*_nbSplit);
-            int numberOfProblem = _numberOfNodesToChange % (cas*_nbSplit);
-            int problemCase = numberOfProblem/_nbSplit;
-            if(numberOfProblem%_nbSplit!=0) System.out.println("alert");
-            int positionProblem =_startPositionOfModification +(startOfProblem * cas*_nbSplit);
+                for (int i = 0; i < _sizeArray; i++) {
+                    listOfNodes[i] = _startPositionOfModification + i;
+                }
+            } else {
 
 
-            for (int i = 0; i < _sizeArray; i++) {
-                listOfNodes[i] = nodeToAdd;
-                subsize++;
-                if (subsize == cas && _nbSplit != 1) {
-                    subsize = 0;
-                    int newPosition = nodeToAdd + ((_nbSplit - 1) * cas) + 1;
-                    if(newPosition<positionProblem)
-                        nodeToAdd = newPosition;
-                    else{
-                        nodeToAdd = positionProblem + (splitNumber * problemCase);
-                        cas = problemCase;
-                    }
+                int splitNumber = (timeStamp - _nbInsert) % _nbSplit;
 
+                if (splitNumber < _numberOfNodesToChange % _nbSplit) {
+                    listOfNodes = new int[_sizeArray + 1];
+                    listOfNodes[_sizeArray] = _startPositionOfModification + _numberOfNodesToChange - splitNumber - 1;
                 } else {
-                    nodeToAdd++;
+                    listOfNodes = new int[_sizeArray];
                 }
 
+                int cas = modificationStatus % _maxCase + 1;
+
+                int subsize = 0;
+                int nodeToAdd = _startPositionOfModification + splitNumber * cas;
+
+                int startOfProblem = _numberOfNodesToChange / (cas * _nbSplit);
+                int numberOfProblem = _numberOfNodesToChange % (cas * _nbSplit);
+                int problemCase = numberOfProblem / _nbSplit;
+                if (numberOfProblem % _nbSplit != 0) System.out.println("alert");
+                int positionProblem = _startPositionOfModification + (startOfProblem * cas * _nbSplit);
+
+
+                for (int i = 0; i < _sizeArray; i++) {
+                    listOfNodes[i] = nodeToAdd;
+                    subsize++;
+                    if (subsize == cas && _nbSplit != 1) {
+                        subsize = 0;
+                        int newPosition = nodeToAdd + ((_nbSplit - 1) * cas) + 1;
+                        if (newPosition < positionProblem)
+                            nodeToAdd = newPosition;
+                        else {
+                            nodeToAdd = positionProblem + (splitNumber * problemCase);
+                            cas = problemCase;
+                        }
+
+                    } else {
+                        nodeToAdd++;
+                    }
+
+                }
             }
 
         }
@@ -177,7 +187,6 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
             }
         } else {
             if (numberOfNodesToChange == 0) return null;
-
             insert = false;
 
             if (startPositionOfModification + numberOfNodesToChange > nbNodes)

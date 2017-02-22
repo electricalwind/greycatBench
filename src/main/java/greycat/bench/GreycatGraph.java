@@ -4,13 +4,15 @@ import greycat.*;
 import greycat.rocksdb.RocksDBStorage;
 import greycat.scheduler.HybridScheduler;
 
+import java.util.concurrent.CountDownLatch;
+
 import static greycat.Tasks.newTask;
 import static greycat.bench.BenchConstants.ENTRY_POINT_INDEX;
 import static greycat.bench.BenchConstants.NODE_ID;
 
 public class GreycatGraph {
 
-    private final Graph _graph;
+    protected final Graph _graph;
     private final GraphGenerator _gGen;
 
     public GreycatGraph(String pathToSave, GraphGenerator graphGenerator) {
@@ -22,7 +24,7 @@ public class GreycatGraph {
         this._gGen = graphGenerator;
     }
 
-    public void creatingGraph(int saveEveryModif) {
+    public void creatingGraph(int saveEveryModif, Callback<Boolean> callback) {
         final long timeStart = System.currentTimeMillis();
         _graph.connect(
                 new Callback<Boolean>() {
@@ -93,7 +95,7 @@ public class GreycatGraph {
                                                                                     Node node = ctx.resultAsNodes().get(0);
                                                                                     int value = ((int) node.get("value")) + 1;
                                                                                     node.set("value", Type.INT, value);
-                                                                                    node.free();
+                                                                                    //node.free();
                                                                                     ctx.continueTask();
                                                                                 })
                                                                 ).save()
@@ -105,9 +107,6 @@ public class GreycatGraph {
                                                             ctx.setVariable("time", time);
                                                             System.out.println(time);
                                                             Operations op = _gGen.nextTimeStamp();
-                                                            if(op ==null){
-                                                                System.out.println("done");
-                                                            }
                                                             ctx.setVariable("operation", op);
                                                             ctx.continueTask();
                                                         }
@@ -131,7 +130,7 @@ public class GreycatGraph {
                                         _graph.disconnect(new Callback<Boolean>() {
                                             @Override
                                             public void on(Boolean result) {
-
+                                                callback.on(result);
                                             }
                                         });
                                     }
@@ -145,22 +144,25 @@ public class GreycatGraph {
 
     }
 
-    public static void main(String[] args) {
-        int[] nbNodes = {100000};//, 1000000, 10000000};
-        int[] percentOfModification = {10};//, 20, 30, 40, 50, 60, 70, 80, 80, 90, 100};
-        int[] nbSplit = {2};
-        int nbModification = 1000;
-
-        for (int i = 0; i < nbNodes.length; i++) {
-            for (int j = 0; j < percentOfModification.length; j++) {
-                for (int k = 0; k < nbSplit.length; k++) {
-
+    public static void main(String[] args) throws InterruptedException {
+        int[] nbNodes = {10000, 100000, 1000000};
+        int[] percentOfModification = {10, 20, 30, 40, 50, 60, 70, 80, 80, 90, 100};
+        int[] nbSplit = {1, 2, 3, 4};
+        int nbModification = 10000;
+        for (int k = 0; k < nbSplit.length; k++) {
+            for (int i = 0; i < nbNodes.length; i++) {
+                for (int j = 0; j < percentOfModification.length; j++) {
                     int startPosition = (100 - percentOfModification[j]) * nbNodes[i] / 100;
-
                     if (percentOfModification[j] == 0 && k != 0) break;
-
+                    CountDownLatch loginLatch = new CountDownLatch(1);
                     GreycatGraph grey = new GreycatGraph("grey/grey_", new SplitBaseGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification, startPosition));
-                    grey.creatingGraph(100);
+                    grey.creatingGraph(100, new Callback<Boolean>() {
+                        @Override
+                        public void on(Boolean result) {
+                            loginLatch.countDown();
+                        }
+                    });
+                    loginLatch.await ();
                 }
             }
         }
