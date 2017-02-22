@@ -2,7 +2,7 @@ package greycat.bench;
 
 import greycat.*;
 import greycat.rocksdb.RocksDBStorage;
-import greycat.scheduler.TrampolineScheduler;
+import greycat.scheduler.HybridScheduler;
 
 import static greycat.Tasks.newTask;
 import static greycat.bench.BenchConstants.ENTRY_POINT_INDEX;
@@ -17,7 +17,8 @@ public class GreycatGraph {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToSave + graphGenerator.toString()))
                 .withMemorySize(1000000)
-                .withScheduler(new TrampolineScheduler()).build();
+                .withScheduler(new HybridScheduler())
+                .build();
         this._gGen = graphGenerator;
     }
 
@@ -36,15 +37,18 @@ public class GreycatGraph {
                                 })
 
                                 .createNode()
-                                .setAttribute(NODE_ID,Type.INT,"-1")
+                                .setAttribute(NODE_ID, Type.INT, "-1")
                                 .addToGlobalIndex(ENTRY_POINT_INDEX, NODE_ID)
 
                                 .whileDo(
-                                        ctx -> ctx.variable("operation") != null,
+                                        ctx -> ctx.variable("operation").get(0) != null,
                                         newTask()
                                                 .thenDo(ctx -> {
                                                     ctx.setTime(ctx.intVar("time"));
                                                     Operations op = (Operations) ctx.variable("operation").get(0);
+                                                    if (op == null) {
+                                                        int i = 0;
+                                                    }
                                                     ctx.setVariable("nodes", op.get_arrayOfNodes());
                                                     ctx.continueWith(ctx.wrap(op.is_insert()));
                                                 })
@@ -54,14 +58,14 @@ public class GreycatGraph {
                                                                 .readVar("nodes")
                                                                 .forEach(
                                                                         newTask()
-                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap((int)ctx.result().get(0) +3)))
                                                                                 .setAsVar("node")
-                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap((ctx.intVar("node") / 10) - 1)))
+                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap((int) ctx.result().get(0) + 3)))
+                                                                                .setAsVar("adaptednode")
+                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap((ctx.intVar("node") / 10) - 1 + 3)))
                                                                                 .setAsVar("father")
                                                                                 .createNode()
                                                                                 .setAttribute(NODE_ID, Type.INT, "{{node}}")
                                                                                 .setAttribute("value", Type.INT, "0")
-
                                                                                 .ifThenElse(ctx -> ctx.intVar("father") == -1,
                                                                                         //rootNode
                                                                                         newTask()
@@ -80,52 +84,49 @@ public class GreycatGraph {
                                                         //else (modify)
                                                         newTask()
                                                                 .readVar("nodes")
-                                                                .forEach(
+                                                                .forEachPar(
                                                                         newTask()
-                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap((int)ctx.result().get(0) +3)))
+                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap(((int) ctx.result().get(0)) + 3)))
                                                                                 .setAsVar("node")
                                                                                 .lookup("{{node}}")
-                                                                                .thenDo(
-                                                                                        ctx ->
-                                                                                        {
-                                                                                            int i = 0;
-                                                                                            ctx.continueTask();
-                                                                                        }
-                                                                                )
                                                                                 .thenDo(ctx -> {
                                                                                     Node node = ctx.resultAsNodes().get(0);
-                                                                                    node.set("value", Type.INT, (int) node.get("value") + 1);
+                                                                                    int value = ((int) node.get("value")) + 1;
+                                                                                    node.set("value", Type.INT, value);
+                                                                                    node.free();
                                                                                     ctx.continueTask();
                                                                                 })
-                                                                )
+                                                                ).save()
                                                 )
                                                 .thenDo(
                                                         ctx ->
                                                         {
                                                             int time = ctx.intVar("time") + 1;
                                                             ctx.setVariable("time", time);
-
-                                                            ctx.setVariable("operation", _gGen.nextTimeStamp());
+                                                            System.out.println(time);
+                                                            Operations op = _gGen.nextTimeStamp();
+                                                            if(op ==null){
+                                                                System.out.println("done");
+                                                            }
+                                                            ctx.setVariable("operation", op);
                                                             ctx.continueTask();
                                                         }
-                                                ).ifThen(ctx -> ctx.intVar("time") % saveEveryModif == 0,
-                                                newTask()
-                                                        .thenDo(ctx ->
-                                                        {
-                                                            final long timeEnd = System.currentTimeMillis();
-                                                            long timeToProcess = timeEnd - timeStart;
-                                                            System.out.println("time to do" + ctx.intVar("time") + " timestamp: " + timeToProcess);
-                                                            ctx.continueTask();
-                                                        })
-                                                        .save()
-                                        )
+                                                )
+                                                .ifThen(ctx -> ctx.intVar("time") % saveEveryModif == 0,
+                                                        newTask()
+                                                                .save()
+                                                )
 
                                 )
+                                .save()
                                 .execute(_graph, new Callback<TaskResult>() {
                                     @Override
                                     public void on(TaskResult result) {
+                                        if (result.exception() != null)
+                                            result.exception().printStackTrace();
                                         final long timeEnd = System.currentTimeMillis();
-                                        System.out.println(timeEnd - timeStart);
+                                        final long timetoProcess = timeEnd - timeStart;
+                                        System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
 
                                         _graph.disconnect(new Callback<Boolean>() {
                                             @Override
@@ -140,9 +141,29 @@ public class GreycatGraph {
         );
     }
 
+    public void actionToTestOnGraph() {
+
+    }
+
     public static void main(String[] args) {
-        GreycatGraph grey = new GreycatGraph("grey_", new SplitBaseGraphGenerator(1000,10,3,1000,500));
-        grey.creatingGraph(100);
+        int[] nbNodes = {100000};//, 1000000, 10000000};
+        int[] percentOfModification = {10};//, 20, 30, 40, 50, 60, 70, 80, 80, 90, 100};
+        int[] nbSplit = {2};
+        int nbModification = 1000;
+
+        for (int i = 0; i < nbNodes.length; i++) {
+            for (int j = 0; j < percentOfModification.length; j++) {
+                for (int k = 0; k < nbSplit.length; k++) {
+
+                    int startPosition = (100 - percentOfModification[j]) * nbNodes[i] / 100;
+
+                    if (percentOfModification[j] == 0 && k != 0) break;
+
+                    GreycatGraph grey = new GreycatGraph("grey/grey_", new SplitBaseGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification, startPosition));
+                    grey.creatingGraph(100);
+                }
+            }
+        }
     }
 
 
