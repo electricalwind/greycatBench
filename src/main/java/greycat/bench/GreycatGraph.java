@@ -137,9 +137,51 @@ public class GreycatGraph {
         );
     }
 
-    public void actionToTestOnGraph() {
-
+    public static Task sumOfAllChildren(String nodeIds) {
+        return newTask()
+                .lookupAll(nodeIds)
+                .mapPar(
+                        newTask()
+                                .traverse("children")
+                                .setAsVar("children")
+                                .inject(0)
+                                .defineAsVar("sum")
+                                .whileDo(ctx -> ctx.variable("children").size() != 0,
+                                        newTask()
+                                                .readVar("children")
+                                                .traverse("value")
+                                                .thenDo(ctx -> {
+                                                    TaskResult tr = ctx.result();
+                                                    int sum = ctx.intVar("sum");
+                                                    for (int i = 0; i < tr.size(); i++) {
+                                                        sum += (int) tr.get(i);
+                                                    }
+                                                    ctx.setVariable("sum", sum);
+                                                    ctx.continueTask();
+                                                })
+                                                .readVar("children")
+                                                .traverse("children")
+                                                .setAsVar("children")
+                                )
+                                .readVar("sum")
+                )
+                .thenDo(ctx -> {
+                    int sum = 0;
+                    TaskResult tr = ctx.result();
+                    for (int i = 0; i < tr.size(); i++) {
+                        sum += (int) tr.get(i);
+                    }
+                    ctx.continueWith(ctx.wrap(sum));
+                });
     }
+
+    public static Task getNodesValueWithoutTraverse(String nodeId, String time){
+        return newTask()
+                .travelInTime(time)
+                .lookupAll(nodeId)
+                .traverse("value");
+    }
+
 
     public static void main(String[] args) throws InterruptedException {
         int memorySize = 100000000;
