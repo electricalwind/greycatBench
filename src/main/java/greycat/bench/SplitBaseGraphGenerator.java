@@ -10,6 +10,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
     private final int _maxCase;
     private final int _sizeArray;
     private final int _percentageOfModification;
+    private final int _offset;
     private int _nbInsert;
     private int _currentTimestamp = 0;
 
@@ -22,7 +23,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
      * @param numberOfModification        how many times should theses nodes be modified
      * @param startPositionOfModification which nodes are supposed to be modified
      */
-    public SplitBaseGraphGenerator(int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification) {
+    public SplitBaseGraphGenerator(int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification, int offset) {
 
         if (percentageOfModification < 0 || percentageOfModification > 100) {
             throw new RuntimeException("A percentage should be between 0 et 100");
@@ -34,6 +35,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
         this._numberOfModification = numberOfModification;
         this._startPositionOfModification = startPositionOfModification;
         this._percentageOfModification = percentageOfModification;
+        this._offset = offset;
 
         //computed Information
         this._numberOfNodesToChange = percentageOfModification * nbNodes / 100;
@@ -41,6 +43,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
         if (nbNodes % 10 != 0) {
             this._nbInsert++;
         }
+
 
         this._maxCase = _numberOfNodesToChange / _nbSplit;
 
@@ -67,7 +70,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
             for (int i = 0; i < 10; i++) {
                 int toAdd = timeStamp * 10 + i;
                 if (toAdd < _nbNodes)
-                    listOfNodes[i] = timeStamp * 10 + i;
+                    listOfNodes[i] = timeStamp * 10 + i +_offset;
             }
         } else {
 
@@ -80,7 +83,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
             if (_nbSplit == 1) {
                 listOfNodes = new int[_sizeArray];
                 for (int i = 0; i < _sizeArray; i++) {
-                    listOfNodes[i] = _startPositionOfModification + i;
+                    listOfNodes[i] = _startPositionOfModification + i +_offset;
                 }
             } else {
 
@@ -107,7 +110,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
 
 
                 for (int i = 0; i < _sizeArray; i++) {
-                    listOfNodes[i] = nodeToAdd;
+                    listOfNodes[i] = nodeToAdd + _offset;
                     subsize++;
                     if (subsize == cas && _nbSplit != 1) {
                         subsize = 0;
@@ -154,6 +157,9 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
         return _currentTimestamp;
     }
 
+    public int getOffset() {
+        return _offset;
+    }
 
     public static void main(String[] args) {
 
