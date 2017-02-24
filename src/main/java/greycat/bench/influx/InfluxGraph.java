@@ -1,8 +1,9 @@
 package greycat.bench.influx;
 
 import greycat.*;
-import greycat.bench.graphgen.GraphGenerator;
+import greycat.bench.BenchGraph;
 import greycat.bench.graphgen.BasicGraphGenerator;
+import greycat.bench.graphgen.GraphGenerator;
 import greycat.rocksdb.RocksDBStorage;
 import greycat.scheduler.HybridScheduler;
 import greycat.struct.Relation;
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import static greycat.Constants.END_OF_TIME;
 import static greycat.Tasks.newTask;
 
-public class InfluxGraph {
+public class InfluxGraph implements BenchGraph {
 
     protected final Graph _graph;
     private final GraphGenerator _gGen;
@@ -33,126 +34,135 @@ public class InfluxGraph {
         this._gGen = graphGenerator;
     }
 
-    public void creatingGraph(Callback<Boolean> callback) {
-        final long timeStart = System.currentTimeMillis();
-        int start = _gGen.getOffset();
-        int end = _gGen.getOffset() + _gGen.get_nbNodes() - 1;
+    public void constructGraph(Callback<Boolean> callback) {
+
         InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
         influxDB.deleteDatabase(_gGen.toString());
+
+        final long timeStart = System.currentTimeMillis();
+
+        int start = _gGen.getOffset();
+        int end = _gGen.getOffset() + _gGen.get_nbNodes() - 1;
+
         influxDB.createDatabase(_gGen.toString());
-        _graph.connect(
-                new Callback<Boolean>() {
-                    @Override
-                    public void on(Boolean result) {
-                        newTask()
-                                .travelInTime(String.valueOf(_gGen.get_nbNodes() / 10))
-                                .loopPar(
-                                        String.valueOf(start), String.valueOf(end),
-                                        newTask()
-                                                .lookup("{{i}}")
-                                                .thenDo(ctx -> {
-                                                    Node node = ctx.resultAsNodes().get(0);
-                                                    int i = ctx.intVar("i");
-                                                    node.timepoints(0, END_OF_TIME, new Callback<long[]>() {
-                                                        @Override
-                                                        public void on(long[] result) {
-                                                            int size = result.length;
-                                                            long[] ids = new long[size];
-                                                            Arrays.fill(ids, i);
-                                                            long[] world = new long[size];
-                                                            Arrays.fill(world, 0);
-                                                            node.free();
-                                                            ctx.graph().lookupBatch(world, result, ids, new Callback<Node[]>() {
-                                                                @Override
-                                                                public void on(Node[] result) {
-                                                                    BatchPoints batchPoints = BatchPoints
-                                                                            .database(_gGen.toString())
-                                                                            .tag("async", "true")
-                                                                            .retentionPolicy("autogen")
-                                                                            .consistency(InfluxDB.ConsistencyLevel.ALL)
-                                                                            .build();
 
-                                                                    for (int j = result.length - 1; j >= 0; j--) {
-                                                                        Node node1 = result[j];
-                                                                        Object father = node1.get("father");
-                                                                        Object children = node1.get("children");
-                                                                        Point point;
-                                                                        if (father != null) {
-                                                                            if (children != null) {
-                                                                                Relation relationFather = (Relation) father;
-                                                                                RelationIndexed relationChildren = (RelationIndexed) children;
-                                                                                point = Point.measurement(String.valueOf(i))
-                                                                                        .time(node1.time(), TimeUnit.SECONDS)
-                                                                                        .addField("value", (int) node1.get("value"))
-                                                                                        .addField("rc",(String) node.get("rc"))
-                                                                                        .addField("children", Arrays.toString(relationChildren.all()))
-                                                                                        .addField("father", relationFather.get(0))
-                                                                                        .build();
-                                                                            } else {
-                                                                                Relation relationFather = (Relation) father;
-                                                                                point = Point.measurement(String.valueOf(i))
-                                                                                        .time(node1.time(), TimeUnit.SECONDS)
-                                                                                        .addField("value", (int) node1.get("value"))
-                                                                                        .addField("rc",(String) node.get("rc"))
-                                                                                        .addField("children", "[]")
-                                                                                        .addField("father", relationFather.get(0))
-                                                                                        .build();
-                                                                            }
-                                                                        } else {
-                                                                            if (children != null) {
-                                                                                RelationIndexed relationChildren = (RelationIndexed) children;
-                                                                                point = Point.measurement(String.valueOf(i))
-                                                                                        .time(node1.time(), TimeUnit.SECONDS)
-                                                                                        .addField("value", (int) node1.get("value"))
-                                                                                        .addField("rc",(String) node.get("rc"))
-                                                                                        .addField("children", Arrays.toString(relationChildren.all()))
-                                                                                        .addField("father", -1L)
-                                                                                        .build();
-                                                                            } else {
-                                                                                point = Point.measurement(String.valueOf(i))
-                                                                                        .time(node1.time(), TimeUnit.SECONDS)
-                                                                                        .addField("value", (int) node1.get("value"))
-                                                                                        .addField("rc",(String) node.get("rc"))
-                                                                                        .addField("children", "[]")
-                                                                                        .addField("father", -1L)
-                                                                                        .build();
-                                                                            }
-                                                                        }
-                                                                        batchPoints.point(point);
-                                                                        node1.free();
+        _graph.connect(connected ->
+                newTask()
+                        .travelInTime(String.valueOf(_gGen.get_nbNodes() / 10))
+                        .loopPar(
+                                String.valueOf(start), String.valueOf(end),
+                                newTask()
+                                        .lookup("{{i}}")
+                                        .thenDo(ctx ->
+                                        {
+                                            Node node = ctx.resultAsNodes().get(0);
+                                            int nodeId = ctx.intVar("i");
+
+                                            node.timepoints(0, END_OF_TIME,
+                                                    timepoints -> {
+                                                        int size = timepoints.length;
+
+                                                        long[] ids = new long[size];
+                                                        Arrays.fill(ids, nodeId);
+
+                                                        long[] world = new long[size];
+                                                        Arrays.fill(world, 0);
+
+                                                        node.free();
+
+                                                        ctx.graph().lookupBatch(world, timepoints, ids, nodes -> {
+                                                            BatchPoints batchPoints = BatchPoints
+                                                                    .database(_gGen.toString())
+                                                                    .tag("async", "true")
+                                                                    .retentionPolicy("autogen")
+                                                                    .consistency(InfluxDB.ConsistencyLevel.ALL)
+                                                                    .build();
+
+                                                            for (int j = nodes.length - 1; j >= 0; j--) {
+                                                                Node node1 = nodes[j];
+                                                                Object father = node1.get("father");
+                                                                Object children = node1.get("children");
+                                                                Point point;
+                                                                if (father != null) {
+                                                                    if (children != null) {
+                                                                        Relation relationFather = (Relation) father;
+                                                                        RelationIndexed relationChildren = (RelationIndexed) children;
+                                                                        point = Point.measurement(String.valueOf(nodeId))
+                                                                                .time(node1.time(), TimeUnit.SECONDS)
+                                                                                .addField("value", (int) node1.get("value"))
+                                                                                .addField("rc", (String) node.get("rc"))
+                                                                                .addField("children", Arrays.toString(relationChildren.all()))
+                                                                                .addField("father", relationFather.get(0))
+                                                                                .build();
+                                                                    } else {
+                                                                        Relation relationFather = (Relation) father;
+                                                                        point = Point.measurement(String.valueOf(nodeId))
+                                                                                .time(node1.time(), TimeUnit.SECONDS)
+                                                                                .addField("value", (int) node1.get("value"))
+                                                                                .addField("rc", (String) node.get("rc"))
+                                                                                .addField("children", "[]")
+                                                                                .addField("father", relationFather.get(0))
+                                                                                .build();
                                                                     }
-                                                                    influxDB.write(batchPoints);
-                                                                    ctx.continueTask();
+                                                                } else {
+                                                                    if (children != null) {
+                                                                        RelationIndexed relationChildren = (RelationIndexed) children;
+                                                                        point = Point.measurement(String.valueOf(nodeId))
+                                                                                .time(node1.time(), TimeUnit.SECONDS)
+                                                                                .addField("value", (int) node1.get("value"))
+                                                                                .addField("rc", (String) node.get("rc"))
+                                                                                .addField("children", Arrays.toString(relationChildren.all()))
+                                                                                .addField("father", -1L)
+                                                                                .build();
+                                                                    } else {
+                                                                        point = Point.measurement(String.valueOf(nodeId))
+                                                                                .time(node1.time(), TimeUnit.SECONDS)
+                                                                                .addField("value", (int) node1.get("value"))
+                                                                                .addField("rc", (String) node.get("rc"))
+                                                                                .addField("children", "[]")
+                                                                                .addField("father", -1L)
+                                                                                .build();
+                                                                    }
                                                                 }
-                                                            });
-                                                        }
+                                                                batchPoints.point(point);
+                                                                node1.free();
+                                                            }
+                                                            influxDB.write(batchPoints);
+                                                            ctx.continueTask();
+                                                        });
                                                     });
-                                                })
-                                )
-                                .execute(_graph, new Callback<TaskResult>() {
-                                    @Override
-                                    public void on(TaskResult result) {
-                                        influxDB.close();
-                                        if (result.exception() != null)
-                                            result.exception().printStackTrace();
-                                        final long timeEnd = System.currentTimeMillis();
-                                        final long timetoProcess = timeEnd - timeStart;
-                                        System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
+                                        })
+                        )
+                        .execute(_graph, new Callback<TaskResult>() {
+                            @Override
+                            public void on(TaskResult result) {
+                                influxDB.close();
+                                if (result.exception() != null)
+                                    result.exception().printStackTrace();
+                                final long timeEnd = System.currentTimeMillis();
+                                final long timetoProcess = timeEnd - timeStart;
+                                System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
 
-                                        _graph.disconnect(new Callback<Boolean>() {
-                                            @Override
-                                            public void on(Boolean result) {
-                                                callback.on(result);
-                                            }
-                                        });
+                                _graph.disconnect(new Callback<Boolean>() {
+                                    @Override
+                                    public void on(Boolean result) {
+                                        callback.on(result);
                                     }
                                 });
-
-                    }
-                }
+                            }
+                        })
         );
     }
 
+    @Override
+    public void sumOfChildren(int id, int time, Callback<Integer> callback) {
+
+    }
+
+    @Override
+    public void buildStringOfNChildren(int id, int n, int time, Callback<String> callback) {
+
+    }
 
     public static void main(String[] args) throws InterruptedException {
         InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
@@ -166,7 +176,7 @@ public class InfluxGraph {
                 for (int j = 0; j < percentOfModification.length; j++) {
                     CountDownLatch loginLatch = new CountDownLatch(1);
                     InfluxGraph influx = new InfluxGraph("grey/grey_", memorySize, new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[0], 0, 3));
-                    influx.creatingGraph(new Callback<Boolean>() {
+                    influx.constructGraph(new Callback<Boolean>() {
                         @Override
                         public void on(Boolean result) {
                             loginLatch.countDown();

@@ -1,6 +1,7 @@
 package greycat.bench.greycat;
 
 import greycat.*;
+import greycat.bench.BenchGraph;
 import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.bench.graphgen.Operations;
@@ -14,29 +15,32 @@ import static greycat.Tasks.newTask;
 import static greycat.bench.BenchConstants.*;
 import static mylittleplugin.MyLittleActions.ifEmptyThen;
 
-public class GreycatGraph {
+public class GreycatGraph implements BenchGraph{
 
 
     protected final Graph _graph;
     private final GraphGenerator _gGen;
 
     private static final String ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private final int _saveEveryModif;
 
     /**
      * @param pathToSave     where should the database be saved
      * @param memorySize     how many nodes should the cache contains
      * @param graphGenerator generator of graph
+     * @
      */
-    public GreycatGraph(String pathToSave, int memorySize, GraphGenerator graphGenerator) {
+    public GreycatGraph(String pathToSave, int memorySize, int saveEvery, GraphGenerator graphGenerator) {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToSave + graphGenerator.toString()))
                 .withMemorySize(memorySize)
                 .withScheduler(new HybridScheduler())
                 .build();
         this._gGen = graphGenerator;
+        this._saveEveryModif = saveEvery;
     }
 
-    public void creatingGraph(int saveEveryModif, Callback<Boolean> callback) {
+    public void constructGraph(Callback<Boolean> callback) {
         final long timeStart = System.currentTimeMillis();
 
         final String graphGenTimeVar = "time";
@@ -132,7 +136,7 @@ public class GreycatGraph {
                                                                     ctx.continueTask();
                                                                 }
                                                         )
-                                                        .ifThen(ctx -> ctx.intVar("time") % saveEveryModif == 0,
+                                                        .ifThen(ctx -> ctx.intVar("time") % _saveEveryModif == 0,
                                                                 newTask()
                                                                         .save()
                                                         )
@@ -160,7 +164,16 @@ public class GreycatGraph {
         );
     }
 
-    public static Task sumOfAllChildren(String nodeIds) {
+    @Override
+    public void sumOfChildren(int id, int time, Callback<Integer> callback) {
+    }
+
+    @Override
+    public void buildStringOfNChildren(int id, int n, int time, Callback<String> callback) {
+
+    }
+
+    private Task sumOfAllChildren(String nodeIds) {
         return newTask()
                 .lookupAll(nodeIds)
                 .mapPar(
@@ -198,7 +211,7 @@ public class GreycatGraph {
                 });
     }
 
-    public static Task getNodesValueWithoutTraverse(String nodeId, String time) {
+    private Task getNodesValueWithoutTraverse(String nodeId, String time) {
         return newTask()
                 .travelInTime(time)
                 .lookupAll(nodeId)
@@ -242,15 +255,10 @@ public class GreycatGraph {
                     if (percentOfModification[j] == 0 && k != 0) break;
                     CountDownLatch countDownLatch = new CountDownLatch(1);
                     GreycatGraph grey = new GreycatGraph(
-                            "grey/grey_", memorySize,
+                            "grey/grey_", memorySize,saveEvery,
                             new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
 
-                    grey.creatingGraph(saveEvery, new Callback<Boolean>() {
-                        @Override
-                        public void on(Boolean result) {
-                            countDownLatch.countDown();
-                        }
-                    });
+                    grey.constructGraph(result -> countDownLatch.countDown());
                     countDownLatch.await();
                 }
             }
