@@ -1,6 +1,6 @@
-package greycat.bench;
+package greycat.bench.graphgen;
 
-public class SplitBaseGraphGenerator implements GraphGenerator {
+public class BasicGraphGenerator implements GraphGenerator {
 
     private final int _nbNodes;
     private final int _nbSplit;
@@ -22,8 +22,9 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
      * @param nbSplit                     how many timestamp does it takes to modify once all the nodes supposed to be modified
      * @param numberOfModification        how many times should theses nodes be modified
      * @param startPositionOfModification which nodes are supposed to be modified
+     * @param offset                      to add to the nodes Id
      */
-    public SplitBaseGraphGenerator(int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification, int offset) {
+    public BasicGraphGenerator(int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification, int offset) {
 
         if (percentageOfModification < 0 || percentageOfModification > 100) {
             throw new RuntimeException("A percentage should be between 0 et 100");
@@ -46,8 +47,6 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
 
 
         this._maxCase = _numberOfNodesToChange / _nbSplit;
-
-
         this._sizeArray = _numberOfNodesToChange / _nbSplit;
 
         if (startPositionOfModification + _numberOfNodesToChange > nbNodes && _numberOfNodesToChange != 0)
@@ -70,7 +69,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
             for (int i = 0; i < 10; i++) {
                 int toAdd = timeStamp * 10 + i;
                 if (toAdd < _nbNodes)
-                    listOfNodes[i] = timeStamp * 10 + i +_offset;
+                    listOfNodes[i] = timeStamp * 10 + i + _offset;
             }
         } else {
 
@@ -83,7 +82,7 @@ public class SplitBaseGraphGenerator implements GraphGenerator {
             if (_nbSplit == 1) {
                 listOfNodes = new int[_sizeArray];
                 for (int i = 0; i < _sizeArray; i++) {
-                    listOfNodes[i] = _startPositionOfModification + i +_offset;
+                    listOfNodes[i] = _startPositionOfModification + i + _offset;
                 }
             } else {
 
