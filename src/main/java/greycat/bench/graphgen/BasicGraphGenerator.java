@@ -44,10 +44,9 @@ public class BasicGraphGenerator implements GraphGenerator {
         if (nbNodes % 10 != 0) {
             this._nbInsert++;
         }
-
-
         this._maxCase = _numberOfNodesToChange / _nbSplit;
-        this._sizeArray = _numberOfNodesToChange / _nbSplit;
+        this._sizeArray = _maxCase;
+
 
         if (startPositionOfModification + _numberOfNodesToChange > nbNodes && _numberOfNodesToChange != 0)
             throw new RuntimeException("startposition to close to the number of nodes");
@@ -132,6 +131,8 @@ public class BasicGraphGenerator implements GraphGenerator {
         return new Operations(insert, listOfNodes);
     }
 
+    //Getter
+
     public int get_nbNodes() {
         return _nbNodes;
     }
@@ -160,79 +161,8 @@ public class BasicGraphGenerator implements GraphGenerator {
         return _offset;
     }
 
-    public static void main(String[] args) {
-
-        for (int i = 0; i < 1000000; i++) {
-            int[] arr = atTimestampDo(i, 1000, 10, 3, 20, 900).get_arrayOfNodes();
-        }
-    }
-
-
     @Override
     public String toString() {
         return _nbNodes + "_" + _percentageOfModification + "_" + _nbSplit + "_" + _numberOfModification;
-    }
-
-    public static Operations atTimestampDo(int timeStamp, int nbNodes, int percentageOfModification, int nbSplit, int numberOfModification, int startPositionOfModification) {
-        boolean insert;
-        final int numberOfNodesToChange = percentageOfModification * nbNodes / 100;
-        int nbInsert = nbNodes / 10;
-        if (nbNodes % 10 != 0) {
-            nbInsert++;
-        }
-        int[] listOfNodes;
-
-        if (timeStamp < nbInsert) {
-            insert = true;
-            listOfNodes = new int[10];
-            for (int i = 0; i < 10; i++) {
-                int toAdd = timeStamp * 10 + i;
-                if (toAdd < nbNodes)
-                    listOfNodes[i] = timeStamp * 10 + i;
-            }
-        } else {
-            if (numberOfNodesToChange == 0) return null;
-            insert = false;
-
-            if (startPositionOfModification + numberOfNodesToChange > nbNodes)
-                throw new RuntimeException("startposition to close to the number of nodes");
-
-            int modificationStatus = (timeStamp - nbInsert) / nbSplit;
-            if (modificationStatus > numberOfModification) return null;
-
-            int splitNumber = (timeStamp - nbInsert) % nbSplit;
-
-            int sizeArray = numberOfNodesToChange / nbSplit;
-            if (splitNumber < numberOfNodesToChange % nbSplit) {
-                listOfNodes = new int[sizeArray + 1];
-                listOfNodes[sizeArray] = startPositionOfModification + numberOfNodesToChange - splitNumber - 1;
-            } else {
-                listOfNodes = new int[sizeArray];
-            }
-
-
-            int maxCase = numberOfNodesToChange / nbSplit;
-            int cas = modificationStatus % maxCase;
-            if (cas == 0) {
-                cas = maxCase;
-            }
-
-            int subsize = 0;
-            int nodeToAdd = startPositionOfModification + splitNumber * cas;
-            for (int i = 0; i < sizeArray; i++) {
-                listOfNodes[i] = nodeToAdd;
-                subsize++;
-                if (subsize == cas) {
-                    subsize = 0;
-                    nodeToAdd = nodeToAdd + (nbSplit - 1) * cas;
-                } else {
-                    nodeToAdd++;
-                }
-
-            }
-
-        }
-        return new Operations(insert, listOfNodes);
-
     }
 }

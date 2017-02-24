@@ -11,16 +11,22 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static greycat.Tasks.newTask;
-import static greycat.bench.BenchConstants.ENTRY_POINT_INDEX;
-import static greycat.bench.BenchConstants.NODE_ID;
+import static greycat.bench.BenchConstants.*;
 import static mylittleplugin.MyLittleActions.ifEmptyThen;
 
 public class GreycatGraph {
 
+
     protected final Graph _graph;
     private final GraphGenerator _gGen;
+
     private static final String ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+    /**
+     * @param pathToSave     where should the database be saved
+     * @param memorySize     how many nodes should the cache contains
+     * @param graphGenerator generator of graph
+     */
     public GreycatGraph(String pathToSave, int memorySize, GraphGenerator graphGenerator) {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToSave + graphGenerator.toString()))
@@ -32,121 +38,125 @@ public class GreycatGraph {
 
     public void creatingGraph(int saveEveryModif, Callback<Boolean> callback) {
         final long timeStart = System.currentTimeMillis();
+
+        final String graphGenTimeVar = "time";
+        final String adaptedTimeVar = "realTime";
+        final String operationVar = "operation";
+        final String valueVar = "value";
+        final String nodesIdVar = "nodesId";
+        final String nodeIdVar = "nodeId";
+        final String fatherIDVar = "fatherId";
+        final String nodeVar = "node";
+        final String fatherVar = "father";
+
         _graph.connect(
-                new Callback<Boolean>() {
-                    @Override
-                    public void on(Boolean result) {
-                        newTask()
-                                .thenDo(ctx -> {
-                                    ctx.setVariable("time", 0);
-                                    ctx.setVariable("realTime",0);
-                                    ctx.setVariable("value", 0);
-                                    ctx.setVariable("operation", _gGen.nextTimeStamp());
-                                    ctx.continueTask();
-                                })
-                                .readGlobalIndex(ENTRY_POINT_INDEX)
-                                .then(
-                                        ifEmptyThen(
+                result -> newTask()
+                        .thenDo(ctx -> {
+                            ctx.setVariable(graphGenTimeVar, 0);
+                            ctx.setVariable(adaptedTimeVar, 0);
+                            ctx.setVariable(valueVar, 0);
+                            ctx.setVariable(operationVar, _gGen.nextTimeStamp());
+                            ctx.continueTask();
+                        })
+
+                        .readGlobalIndex(ENTRY_POINT_INDEX)
+                        .then(ifEmptyThen(
+                                newTask()
+                                        //Dealing with Greycat initialization
+                                        .createNode()
+                                        .setAttribute(NODE_ID, Type.INT, "-1")
+                                        .addToGlobalIndex(ENTRY_POINT_INDEX, NODE_ID)
+
+                                        //Starting Graph Insert
+                                        .whileDo(ctx -> ctx.variable(operationVar).get(0) != null,
                                                 newTask()
-                                                        .createNode()
-                                                        .setAttribute(NODE_ID, Type.INT, "-1")
-                                                        .addToGlobalIndex(ENTRY_POINT_INDEX, NODE_ID)
-                                                        .whileDo(
-                                                                ctx -> ctx.variable("operation").get(0) != null,
+                                                        //Operation Object handling
+                                                        .thenDo(ctx -> {
+                                                            ctx.setTime(ctx.intVar(adaptedTimeVar));
+                                                            Operations op = (Operations) ctx.variable(operationVar).get(0);
+                                                            ctx.setVariable(nodesIdVar, op.get_arrayOfNodes());
+                                                            ctx.continueWith(ctx.wrap(op.is_insert()));
+                                                        })
+
+                                                        .ifThenElse(ctx -> (boolean) ctx.result().get(0),
+                                                                //If Insert
+                                                                newTask()
+                                                                        .readVar(nodesIdVar)
+                                                                        .forEach(newTask()
+                                                                                .setAsVar(nodeIdVar)
+                                                                                .thenDo(ctx -> ctx.continueWith(ctx.wrap(((ctx.intVar(nodeIdVar) - _gGen.getOffset()) / 10) - 1 + _gGen.getOffset())))
+                                                                                .setAsVar(fatherIDVar)
+                                                                                .createNode()
+                                                                                .setAttribute(NODE_ID, Type.INT, "{{" + nodeIdVar + "}}")
+                                                                                .setAttribute(NODE_VALUE, Type.INT, "{{" + valueVar + "}}")
+                                                                                .setAttribute(NODE_RANDOM_CHAR, Type.STRING, String.valueOf(ALPHANUM.charAt(ThreadLocalRandom.current().nextInt())))
+                                                                                .ifThenElse(ctx -> ctx.intVar(fatherIDVar) == -1 + _gGen.getOffset(),
+                                                                                        //rootNode
+                                                                                        newTask()
+                                                                                                .addToGlobalIndex(ENTRY_POINT_INDEX, NODE_ID)
+                                                                                        ,
+                                                                                        //children
+                                                                                        newTask()
+                                                                                                .setAsVar(nodeVar)
+                                                                                                .lookup("{{" + fatherIDVar + "}}")
+                                                                                                .addVarToRelation(NODE_CHILDREN, nodeVar, NODE_ID)
+                                                                                                .setAsVar(fatherVar)
+                                                                                                .readVar(nodeVar)
+                                                                                                .addVarToRelation(NODE_FATHER, fatherVar)
+                                                                                )
+                                                                        )
+                                                                ,
+                                                                //else modify
                                                                 newTask()
                                                                         .thenDo(ctx -> {
-                                                                            ctx.setTime(ctx.intVar("realTime"));
-                                                                            Operations op = (Operations) ctx.variable("operation").get(0);
-                                                                            if (op == null) {
-                                                                                int i = 0;
-                                                                            }
-                                                                            ctx.setVariable("nodesId", op.get_arrayOfNodes());
-                                                                            ctx.continueWith(ctx.wrap(op.is_insert()));
+                                                                            int value = ThreadLocalRandom.current().nextInt(-10, 25);
+                                                                            ctx.setVariable(valueVar, value);
+                                                                            ctx.continueTask();
                                                                         })
-                                                                        .ifThenElse(ctx -> (boolean) ctx.result().get(0),
-                                                                                //then (insert)
+                                                                        .lookupAll("{{" + nodesIdVar + "}}")
+                                                                        .forEachPar(
                                                                                 newTask()
-                                                                                        .readVar("nodesId")
-                                                                                        .forEach(
-                                                                                                newTask()
-                                                                                                        .setAsVar("nodeId")
-                                                                                                        .thenDo(ctx -> ctx.continueWith(ctx.wrap(((ctx.intVar("nodeId") - _gGen.getOffset()) / 10) - 1 + _gGen.getOffset())))
-                                                                                                        .setAsVar("fatherId")
-                                                                                                        .createNode()
-                                                                                                        .setAttribute(NODE_ID, Type.INT, "{{nodeId}}")
-                                                                                                        .setAttribute("value", Type.INT, "{{value}}")
-                                                                                                        .setAttribute("rc", Type.STRING, String.valueOf(ALPHANUM.charAt(ThreadLocalRandom.current().nextInt())))
-                                                                                                        .ifThenElse(ctx -> ctx.intVar("fatherId") == -1 + _gGen.getOffset(),
-                                                                                                                //rootNode
-                                                                                                                newTask()
-                                                                                                                        .addToGlobalIndex(ENTRY_POINT_INDEX, NODE_ID)
-                                                                                                                ,
-                                                                                                                newTask()
-                                                                                                                        .setAsVar("node")
-                                                                                                                        .lookup("{{fatherId}}")
-                                                                                                                        .addVarToRelation("children", "node", NODE_ID)
-                                                                                                                        .setAsVar("fatherNode")
-                                                                                                                        .readVar("node")
-                                                                                                                        .addVarToRelation("father", "fatherNode")
-                                                                                                        )
-                                                                                        )
-                                                                                ,
-                                                                                //else (modify)
-                                                                                newTask()
-                                                                                        .thenDo(ctx -> {
-                                                                                            //int value = (ctx.intVar("value") / _gGen.get_nbSplit()) + 1;
-                                                                                            int value = ThreadLocalRandom.current().nextInt(-10, 25);
-                                                                                            ctx.setVariable("newValue", value);
-                                                                                            ctx.continueTask();
-                                                                                        })
-                                                                                        .lookupAll("{{nodesId}}")
-                                                                                        .forEachPar(
-                                                                                                newTask()
-                                                                                                        .setAttribute("value", Type.INT, "{{newValue}}")
-                                                                                                        .setAttribute("rc", Type.STRING, String.valueOf(ALPHANUM.charAt(ThreadLocalRandom.current().nextInt())))
-                                                                                        )
-                                                                                        //.then(increment("value", 1))
+                                                                                        .setAttribute(NODE_VALUE, Type.INT, "{{" + valueVar + "}}")
+                                                                                        .setAttribute(NODE_RANDOM_CHAR, Type.STRING, String.valueOf(ALPHANUM.charAt(ThreadLocalRandom.current().nextInt())))
                                                                         )
-                                                                        .thenDo(
-                                                                                ctx ->
-                                                                                {
-                                                                                    int time = ctx.intVar("time") + 1;
-                                                                                    ctx.setVariable("time", time);
-                                                                                    int realTime = ctx.intVar("realTime") +ThreadLocalRandom.current().nextInt(1,6);
-                                                                                    // System.out.println(time);
-                                                                                    Operations op = _gGen.nextTimeStamp();
-                                                                                    ctx.setVariable("operation", op);
-                                                                                    ctx.continueTask();
-                                                                                }
-                                                                        )
-                                                                        .ifThen(ctx -> ctx.intVar("time") % saveEveryModif == 0,
-                                                                                newTask()
-                                                                                        .save()
-                                                                        )
-
                                                         )
-                                                        .save()
-                                        )
-                                )
-                                .execute(_graph, new Callback<TaskResult>() {
-                                    @Override
-                                    public void on(TaskResult result) {
-                                        if (result.exception() != null)
-                                            result.exception().printStackTrace();
-                                        final long timeEnd = System.currentTimeMillis();
-                                        final long timetoProcess = timeEnd - timeStart;
-                                        System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
+                                                        .thenDo(
+                                                                ctx ->
+                                                                {
+                                                                    int time = ctx.intVar(graphGenTimeVar) + 1;
+                                                                    ctx.setVariable(graphGenTimeVar, time);
+                                                                    int realTime = ctx.intVar(adaptedTimeVar) + ThreadLocalRandom.current().nextInt(1, 6);
+                                                                    ctx.setVariable(adaptedTimeVar, realTime);
+                                                                    Operations op = _gGen.nextTimeStamp();
+                                                                    ctx.setVariable("operation", op);
+                                                                    ctx.continueTask();
+                                                                }
+                                                        )
+                                                        .ifThen(ctx -> ctx.intVar("time") % saveEveryModif == 0,
+                                                                newTask()
+                                                                        .save()
+                                                        )
 
-                                        _graph.disconnect(new Callback<Boolean>() {
-                                            @Override
-                                            public void on(Boolean result) {
-                                                callback.on(result);
-                                            }
-                                        });
+                                        )
+                                        .save()
+                                )
+                        )
+                        .execute(_graph, new Callback<TaskResult>() {
+                            @Override
+                            public void on(TaskResult result) {
+                                if (result.exception() != null)
+                                    result.exception().printStackTrace();
+                                final long timeEnd = System.currentTimeMillis();
+                                final long timetoProcess = timeEnd - timeStart;
+                                System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
+                                _graph.disconnect(new Callback<Boolean>() {
+                                    @Override
+                                    public void on(Boolean result) {
+                                        callback.on(result);
                                     }
                                 });
-                    }
-                }
+                            }
+                        })
         );
     }
 
@@ -197,28 +207,51 @@ public class GreycatGraph {
 
 
     public static void main(String[] args) throws InterruptedException {
-        int memorySize = 1000000;//00
-        int[] nbNodes = {10000};//0, 100000, 1000000};
-        int[] percentOfModification = {10};//{0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-        int[] nbSplit = {1};//{1, 2, 3, 4};
-        int[] nbModification = {10000};//{10000,10000,1000};
+
+        //Parameters
+        int memorySize;
+        int[] percentOfModification;
+        int[] nbSplit;
+        int[] nbModification;
+        int[] nbNodes;
+
+        boolean test = true;
+        if (test) { // laptop
+            memorySize = 1000000;
+            nbNodes = new int[]{10000};
+            percentOfModification = new int[]{10};
+            nbSplit = new int[]{1};
+            nbModification = new int[]{10000};
+        } else { //server
+            memorySize = 100000000;
+            nbNodes = new int[]{10000, 100000, 1000000};
+            percentOfModification = new int[]{0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+            nbSplit = new int[]{1, 2, 3, 4};
+            nbModification = new int[]{10000,10000,1000};
+        }
+
+
         for (int k = 0; k < nbSplit.length; k++) {
             for (int i = 0; i < nbNodes.length; i++) {
                 for (int j = 0; j < percentOfModification.length; j++) {
 
                     int startPosition = (100 - percentOfModification[j]) * nbNodes[i] / 100;
+
                     int saveEvery = (memorySize * 10 * nbSplit[k]) / (nbNodes[i] * percentOfModification[j] + 1) - 1;
 
                     if (percentOfModification[j] == 0 && k != 0) break;
-                    CountDownLatch loginLatch = new CountDownLatch(1);
-                    GreycatGraph grey = new GreycatGraph("grey/grey_", memorySize, new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
+                    CountDownLatch countDownLatch = new CountDownLatch(1);
+                    GreycatGraph grey = new GreycatGraph(
+                            "grey/grey_", memorySize,
+                            new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
+
                     grey.creatingGraph(saveEvery, new Callback<Boolean>() {
                         @Override
                         public void on(Boolean result) {
-                            loginLatch.countDown();
+                            countDownLatch.countDown();
                         }
                     });
-                    loginLatch.await();
+                    countDownLatch.await();
                 }
             }
         }

@@ -6,10 +6,10 @@ public class BenchConstants {
 
     public final static String NODE_ID = "nodeID";
 
-    public final static String NODE_IDENTIFIER = "percentOfModif";
+    public final static String NODE_VALUE = "value";
+    public final static String NODE_RANDOM_CHAR = "rc";
 
-    public final static String PERCENT_OF_MODIF_TS = "percentOfModifTs";
-
-    public final static String PERCENT = "percent";
+    public final static String NODE_FATHER = "father";
+    public final static String NODE_CHILDREN = "children";
 
 }
