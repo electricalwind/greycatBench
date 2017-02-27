@@ -1,7 +1,6 @@
-package greycat.bench.influx;
+package greycat.bench.graphbench;
 
 import greycat.*;
-import greycat.bench.BenchGraph;
 import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.rocksdb.RocksDBStorage;

@@ -1,4 +1,4 @@
-package greycat.bench;
+package greycat.bench.graphbench;
 
 import greycat.Callback;
 

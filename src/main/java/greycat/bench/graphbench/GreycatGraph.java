@@ -1,13 +1,13 @@
-package greycat.bench.greycat;
+package greycat.bench.graphbench;
 
 import greycat.*;
-import greycat.bench.BenchGraph;
 import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.bench.graphgen.Operations;
 import greycat.rocksdb.RocksDBStorage;
 import greycat.scheduler.TrampolineScheduler;
 import greycat.struct.Relation;
+import org.rocksdb.RocksDB;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
@@ -25,6 +25,7 @@ public class GreycatGraph implements BenchGraph {
 
     private static final String ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private final int _saveEveryModif;
+    public final static String adaptedTimeVar = "realTime";
 
     /**
      * @param pathToSave     where should the database be saved
@@ -43,10 +44,14 @@ public class GreycatGraph implements BenchGraph {
     }
 
     public void constructGraph(Callback<Boolean> callback) {
+        internal_ConstructGraph(null, callback);
+    }
+
+
+    protected void internal_ConstructGraph(RocksDB dbSnap, Callback<Boolean> callback) {
         final long timeStart = System.currentTimeMillis();
 
         final String graphGenTimeVar = "time";
-        final String adaptedTimeVar = "realTime";
         final String operationVar = "operation";
         final String valueVar = "value";
         final String nodesIdVar = "nodesId";
@@ -88,7 +93,7 @@ public class GreycatGraph implements BenchGraph {
                                                                 //If Insert
                                                                 newTask()
                                                                         .readVar(nodesIdVar)
-                                                                        .forEach(newTask()
+                                                                        .map(newTask()
                                                                                 .ifThen(ctx -> (int) ctx.result().get(0) != -1,
                                                                                         newTask()
                                                                                                 .setAsVar(nodeIdVar)
@@ -125,12 +130,16 @@ public class GreycatGraph implements BenchGraph {
                                                                             ctx.continueTask();
                                                                         })
                                                                         .lookupAll("{{" + nodesIdVar + "}}")
-                                                                        .forEachPar(
+                                                                        .mapPar(
                                                                                 newTask()
                                                                                         .setAttribute(NODE_VALUE, Type.INT, "{{" + valueVar + "}}")
                                                                                         .setAttribute(NODE_RANDOM_CHAR, Type.STRING, "{{" + charVar + "}}")
                                                                         )
                                                         )
+
+                                                        .ifThen(ctx -> dbSnap != null,
+                                                                newTask().pipe(RockDBSnapshot.snapshot(dbSnap, ((RocksDBGraph) this).get_path())))
+
                                                         .thenDo(
                                                                 ctx ->
                                                                 {

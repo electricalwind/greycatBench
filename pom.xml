@@ -69,7 +69,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.5.0</version>
                 <configuration>
-                    <mainClass>greycat.bench.influx.InfluxGraph</mainClass>
+                    <mainClass>greycat.bench.graphbench.InfluxGraph</mainClass>
                 </configuration>
             </plugin>
 
