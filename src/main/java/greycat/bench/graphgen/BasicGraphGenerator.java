@@ -64,7 +64,7 @@ public class BasicGraphGenerator implements GraphGenerator {
 
         if (timeStamp < _nbInsert) {
             insert = true;
-            listOfNodes = new int[10];
+            listOfNodes = new int[]{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
             for (int i = 0; i < 10; i++) {
                 int toAdd = timeStamp * 10 + i;
                 if (toAdd < _nbNodes)
