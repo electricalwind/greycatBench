@@ -26,6 +26,7 @@ public class GreycatGraph implements BenchGraph {
     private static final String ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private final int _saveEveryModif;
     public final static String adaptedTimeVar = "realTime";
+    public final static String fatherVar = "father";
 
     /**
      * @param pathToSave     where should the database be saved
@@ -88,6 +89,10 @@ public class GreycatGraph implements BenchGraph {
                                                             ctx.setVariable(nodesIdVar, op.get_arrayOfNodes());
                                                             ctx.continueWith(ctx.wrap(op.is_insert()));
                                                         })
+
+                                                        //snapshot
+                                                        .declareVar(fatherVar)
+
 
                                                         .ifThenElse(ctx -> (boolean) ctx.result().get(0),
                                                                 //If Insert
@@ -323,8 +328,8 @@ public class GreycatGraph implements BenchGraph {
                             "grey/grey_", memorySize, saveEvery,
                             new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
 
-                    grey.constructGraph(result -> countDownLatch.countDown());
-                    grey.sumOfChildren(11, 1500, new Callback<Integer>() {
+                   // grey.constructGraph(result -> countDownLatch.countDown());
+                    grey.sumOfChildren(95, 1500, new Callback<Integer>() {
                         @Override
                         public void on(Integer integer) {
 
@@ -332,14 +337,14 @@ public class GreycatGraph implements BenchGraph {
                             System.out.println(integer);
                         }
                     });
-                    grey.buildStringOfNChildren(11, 5, 1500, new Callback<String>() {
+                    /**grey.buildStringOfNChildren(11, 5, 1500, new Callback<String>() {
                         @Override
                         public void on(String s) {
 
                             countDownLatch.countDown();
                             System.out.println(s);
                         }
-                    });
+                    });*/
                     countDownLatch.await();
                 }
             }
