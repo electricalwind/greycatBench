@@ -27,6 +27,7 @@ public class MainWriting {
         for (int k = 0; k < nbSplit.length; k++) {
             for (int i = 0; i < nbNodes.length; i++) {
                 for (int j = 0; j < percentOfModification.length; j++) {
+                    final long startIteration = System.currentTimeMillis();
                     CountDownLatch countDownLatch = new CountDownLatch(1);
                     int startPosition = (100 - percentOfModification[j]) * nbNodes[i] / 100;
 
@@ -34,15 +35,17 @@ public class MainWriting {
                     GraphGenerator graphGenerator = new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[0], startPosition, 3);
 
                     RocksDBGraph rocksDBGraph = new RocksDBGraph("grey/grey_", memorySize, saveEvery, graphGenerator, "snap/");
-                    rocksDBGraph.constructGraph(on -> {
-                        countDownLatch.countDown();
-                    });
+                    rocksDBGraph.constructGraph(on -> countDownLatch.countDown());
 
                     countDownLatch.await();
+
                     CountDownLatch countDownLatchInflux = new CountDownLatch(1);
                     InfluxGraph influx = new InfluxGraph("grey/grey_", memorySize, graphGenerator);
                     influx.constructGraph(result -> countDownLatchInflux.countDown());
                     countDownLatchInflux.await();
+
+                    final long time  = System.currentTimeMillis() - startIteration;
+                    System.out.println(graphGenerator.toString() +" : "+ time +" ms");
                 }
             }
         }

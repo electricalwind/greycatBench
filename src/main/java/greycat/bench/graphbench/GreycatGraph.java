@@ -192,7 +192,6 @@ public class GreycatGraph implements BenchGraph {
         final String sum = "Sum";
         _graph.connect(
                 on -> {
-                    final long timeStart = System.currentTimeMillis();
                     newTask()
 
                             .travelInTime("" + time)
@@ -233,12 +232,7 @@ public class GreycatGraph implements BenchGraph {
                                     }
                                 }
                                 _graph.disconnect(
-                                        off -> {
-                                            final long timeEnd = System.currentTimeMillis();
-                                            final long timetoProcess = timeEnd - timeStart;
-                                            System.out.println(timetoProcess + " ms");
-                                            callback.on(result);
-                                        });
+                                        off -> callback.on(result));
                             });
 
                 });
@@ -289,7 +283,7 @@ public class GreycatGraph implements BenchGraph {
                                             taskResult.exception().printStackTrace();
 
                                         String[] result = new String[idsTolook.length];
-                                        Arrays.fill(result,"");
+                                        Arrays.fill(result, "");
                                         if (taskResult != null) {
                                             for (int i = 0; i < taskResult.size(); i++) {
                                                 TaskResult subTaskResult = (TaskResult) taskResult.get(i);

@@ -135,23 +135,11 @@ public class InfluxGraph implements BenchGraph {
                                                     });
                                         })
                         )
-                        .execute(_graph, new Callback<TaskResult>() {
-                            @Override
-                            public void on(TaskResult result) {
-                                influxDB.close();
-                                if (result.exception() != null)
-                                    result.exception().printStackTrace();
-                                final long timeEnd = System.currentTimeMillis();
-                                final long timetoProcess = timeEnd - timeStart;
-                                System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
-
-                                _graph.disconnect(new Callback<Boolean>() {
-                                    @Override
-                                    public void on(Boolean result) {
-                                        callback.on(result);
-                                    }
-                                });
-                            }
+                        .execute(_graph, result -> {
+                            influxDB.close();
+                            if (result.exception() != null)
+                                result.exception().printStackTrace();
+                            _graph.disconnect(result1 -> callback.on(result1));
                         })
         );
     }
