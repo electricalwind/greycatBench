@@ -4,7 +4,7 @@ import greycat.*;
 import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.rocksdb.RocksDBStorage;
-import greycat.scheduler.TrampolineScheduler;
+import greycat.scheduler.HybridScheduler;
 import greycat.struct.Relation;
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBFactory;
@@ -32,7 +32,7 @@ public class InfluxGraph implements BenchGraph {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToLoad + graphGenerator.toString()))
                 .withMemorySize(memorySize)
-                .withScheduler(new TrampolineScheduler())
+                .withScheduler(new HybridScheduler())
                 .build();
         this._gGen = graphGenerator;
     }
@@ -157,67 +157,77 @@ public class InfluxGraph implements BenchGraph {
     }
 
     @Override
-    public void sumOfChildren(int id, int time, Callback<Integer> callback) {
+    public void sumOfChildren(int[] idsToLook, int time, Callback<int[]> callback) {
         InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
         String db = _gGen.toString();
-        List<Integer> listOfId = new ArrayList<>();
-        listOfId.add(id);
-        double sum = 0;
-        while (listOfId.size() != 0) {
-            String ids = listOfId.stream().map(Object::toString).collect(Collectors.joining("\",\"", "\"", "\""));
-            String squery = "SELECT value,children FROM " + ids + " WHERE time<=" + time + "s ORDER BY time DESC LIMIT 1";
-            Query query = new Query(squery, db);
-            QueryResult result = influxDB.query(query);
-            List<QueryResult.Result> resultList = result.getResults();
-            listOfId.clear();
-            if (resultList.size() != 0) {
-                List<QueryResult.Series> series = resultList.get(0).getSeries();
-                for (int i = 0; i < series.size(); i++) {
-                    List<Object> lo = series.get(i).getValues().get(0);
-                    sum += (double) lo.get(1);
-                    String childrens = (String) lo.get(2);
-                    if (childrens.compareTo("[]") != 0) {
-                        String[] childs = childrens.substring(1, childrens.length() - 1).split(",");
-                        for (int child = 0; child < childs.length; child++) {
-                            listOfId.add(Integer.valueOf(childs[child].trim()));
+
+        int[] sums = new int[idsToLook.length];
+        for (int k = 0; k < idsToLook.length; k++) {
+            List<Integer> listOfId = new ArrayList<>();
+            listOfId.add(idsToLook[k]);
+            double sum = 0;
+            while (listOfId.size() != 0) {
+                String ids = listOfId.stream().map(Object::toString).collect(Collectors.joining("\",\"", "\"", "\""));
+                String squery = "SELECT value,children FROM " + ids + " WHERE time<=" + time + "s ORDER BY time DESC LIMIT 1";
+                Query query = new Query(squery, db);
+                QueryResult result = influxDB.query(query);
+                List<QueryResult.Result> resultList = result.getResults();
+                listOfId.clear();
+                if (resultList.size() != 0) {
+                    List<QueryResult.Series> series = resultList.get(0).getSeries();
+                    for (int i = 0; i < series.size(); i++) {
+                        List<Object> lo = series.get(i).getValues().get(0);
+                        sum += (double) lo.get(1);
+                        String childrens = (String) lo.get(2);
+                        if (childrens.compareTo("[]") != 0) {
+                            String[] childs = childrens.substring(1, childrens.length() - 1).split(",");
+                            for (int child = 0; child < childs.length; child++) {
+                                listOfId.add(Integer.valueOf(childs[child].trim()));
+                            }
                         }
                     }
                 }
-            }
 
+            }
+            sums[k] = (int) sum;
         }
-        callback.on((int) sum);
+        callback.on(sums);
     }
 
     @Override
-    public void buildStringOfNChildren(int id, int n, int time, Callback<String> callback) {
+    public void buildStringOfNChildren(int[] idsToLook, int n, int time, Callback<String[]> callback) {
         if (n < 0 || n > 9) throw new RuntimeException("n must be between 0 and 9");
         InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
         String db = _gGen.toString();
-        int toLook = id;
-        String sequence = "";
-        while (toLook != -1) {
-            String squery = "SELECT rc,children FROM \"" + toLook + "\" WHERE time<=" + time + "s ORDER BY time DESC LIMIT 1";
-            Query query = new Query(squery, db);
-            QueryResult result = influxDB.query(query);
-            List<QueryResult.Result> resultList = result.getResults();
-            toLook = -1;
-            if (resultList.size() != 0) {
-                QueryResult.Series serie = resultList.get(0).getSeries().get(0);
-                List<Object> lo = serie.getValues().get(0);
-                sequence += (String) lo.get(1);
-                String childrens = (String) lo.get(2);
-                if (childrens.compareTo("[]") != 0) {
-                    String[] childs = childrens.substring(1, childrens.length() - 1).split(",");
-                    if (childs.length > n) {
-                        toLook = Integer.valueOf(childs[n].trim());
+
+        String[] sequences = new String[idsToLook.length];
+        for (int k = 0; k < idsToLook.length; k++) {
+            int toLook = idsToLook[k];
+            String sequence = "";
+            while (toLook != -1) {
+                String squery = "SELECT rc,children FROM \"" + toLook + "\" WHERE time<=" + time + "s ORDER BY time DESC LIMIT 1";
+                Query query = new Query(squery, db);
+                QueryResult result = influxDB.query(query);
+                List<QueryResult.Result> resultList = result.getResults();
+                toLook = -1;
+                if (resultList.size() != 0) {
+                    QueryResult.Series serie = resultList.get(0).getSeries().get(0);
+                    List<Object> lo = serie.getValues().get(0);
+                    sequence += (String) lo.get(1);
+                    String childrens = (String) lo.get(2);
+                    if (childrens.compareTo("[]") != 0) {
+                        String[] childs = childrens.substring(1, childrens.length() - 1).split(",");
+                        if (childs.length > n) {
+                            toLook = Integer.valueOf(childs[n].trim());
+                        }
                     }
+
                 }
 
             }
-
+            sequences[k] = sequence;
         }
-        callback.on(sequence);
+        callback.on(sequences);
 
 
     }
@@ -247,25 +257,26 @@ public class InfluxGraph implements BenchGraph {
         for (int k = 0; k < nbSplit.length; k++) {
             for (int i = 0; i < nbNodes.length; i++) {
                 for (int j = 0; j < percentOfModification.length; j++) {
-                    CountDownLatch loginLatch = new CountDownLatch(1);
+                    CountDownLatch loginLatch = new CountDownLatch(2);
                     InfluxGraph influx = new InfluxGraph("grey/grey_", memorySize, new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[0], 0, 3));
                     influx.constructGraph(new Callback<Boolean>() {
-                    @Override public void on(Boolean result) {
-                    loginLatch.countDown();
-                    }
-                    });
-                    influx.sumOfChildren(11, 1500, new Callback<Integer>() {
                         @Override
-                        public void on(Integer integer) {
+                        public void on(Boolean result) {
                             loginLatch.countDown();
-                            System.out.println(integer);
                         }
                     });
-                    influx.buildStringOfNChildren(11, 5, 1500, new Callback<String>() {
+                    influx.sumOfChildren(new int[]{11,10}, 1500, new Callback<int[]>() {
                         @Override
-                        public void on(String s) {
+                        public void on(int[] integer) {
                             loginLatch.countDown();
-                            System.out.println(s);
+                            System.out.println(Arrays.toString(integer));
+                        }
+                    });
+                    influx.buildStringOfNChildren(new int[]{11,10}, 5, 1500, new Callback<String[]>() {
+                        @Override
+                        public void on(String[] s) {
+                            loginLatch.countDown();
+                            System.out.println(Arrays.toString(s));
                         }
                     });
                     loginLatch.await();

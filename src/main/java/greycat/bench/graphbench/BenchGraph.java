@@ -8,6 +8,6 @@ public interface BenchGraph {
     void constructGraph(Callback<Boolean> callback);
 
     //read
-    void sumOfChildren(int id, int time, Callback<Integer> callback);
-    void buildStringOfNChildren(int id, int n, int time, Callback<String> callback);
+    void sumOfChildren(int[] idsTolook, int time, Callback<int[]> callback);
+    void buildStringOfNChildren(int[] idsTolook, int n, int time, Callback<String[]> callback);
 }

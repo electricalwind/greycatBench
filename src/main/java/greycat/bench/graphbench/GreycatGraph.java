@@ -5,10 +5,11 @@ import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.bench.graphgen.Operations;
 import greycat.rocksdb.RocksDBStorage;
-import greycat.scheduler.TrampolineScheduler;
+import greycat.scheduler.HybridScheduler;
 import greycat.struct.Relation;
 import org.rocksdb.RocksDB;
 
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -38,7 +39,7 @@ public class GreycatGraph implements BenchGraph {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToSave + graphGenerator.toString()))
                 .withMemorySize(memorySize)
-                .withScheduler(new TrampolineScheduler())
+                .withScheduler(new HybridScheduler())
                 .build();
         this._gGen = graphGenerator;
         this._saveEveryModif = saveEvery;
@@ -185,57 +186,67 @@ public class GreycatGraph implements BenchGraph {
         );
     }
 
+    @SuppressWarnings("Duplicates")
     @Override
-    public void sumOfChildren(int id, int time, Callback<Integer> callback) {
+    public void sumOfChildren(int[] idsTolook, int time, Callback<int[]> callback) {
         final String sum = "Sum";
         _graph.connect(
                 on -> {
                     final long timeStart = System.currentTimeMillis();
                     newTask()
-                            .declareVar(sum)
+
                             .travelInTime("" + time)
-                            .lookup("" + id)
-                            .then(ifNotEmptyThen(
+
+                            .inject(idsTolook)
+                            .map(
                                     newTask()
-                                            .setAsVar("nodes")
-                                            .traverse(NODE_VALUE)
-                                            .addToVar(sum)
-                                            .whileDo(ctx -> ctx.variable("nodes").size() > 0,
+                                            .declareVar(sum)
+                                            .lookup("{{result}}")
+                                            .then(ifNotEmptyThen(
                                                     newTask()
-                                                            .readVar("nodes")
-                                                            .traverse(NODE_CHILDREN)
-                                                            .flat()
                                                             .setAsVar("nodes")
                                                             .traverse(NODE_VALUE)
                                                             .addToVar(sum)
-                                            )
-                            ))
-                            .readVar(sum)
+                                                            .whileDo(ctx -> ctx.variable("nodes").size() > 0,
+                                                                    newTask()
+                                                                            .readVar("nodes")
+                                                                            .traverse(NODE_CHILDREN)
+                                                                            .flat()
+                                                                            .setAsVar("nodes")
+                                                                            .traverse(NODE_VALUE)
+                                                                            .addToVar(sum)
+                                                            )
+                                            ))
+                                            .readVar(sum)
+                            )
                             .execute(_graph, taskResult -> {
                                 if (taskResult.exception() != null)
                                     taskResult.exception().printStackTrace();
-                                int result = 0;
+
+                                int[] result = new int[idsTolook.length];
                                 if (taskResult != null) {
                                     for (int i = 0; i < taskResult.size(); i++) {
-                                        result += (int) taskResult.get(i);
+                                        TaskResult subTaskResult = (TaskResult) taskResult.get(i);
+                                        for (int j = 0; j < subTaskResult.size(); j++) {
+                                            result[i] += (int) subTaskResult.get(j);
+                                        }
                                     }
                                 }
-                                int finalResult = result;
                                 _graph.disconnect(
                                         off -> {
                                             final long timeEnd = System.currentTimeMillis();
                                             final long timetoProcess = timeEnd - timeStart;
                                             System.out.println(timetoProcess + " ms");
-                                            callback.on(finalResult);
+                                            callback.on(result);
                                         });
                             });
 
-                }
-        );
+                });
     }
 
+    @SuppressWarnings("Duplicates")
     @Override
-    public void buildStringOfNChildren(int id, int n, int time, Callback<String> callback) {
+    public void buildStringOfNChildren(int[] idsTolook, int n, int time, Callback<String[]> callback) {
         if (n < 0 || n > 9) throw new RuntimeException("n must be between 0 and 9");
         final String stringSequence = "StringSequence";
 
@@ -243,45 +254,56 @@ public class GreycatGraph implements BenchGraph {
                 on -> {
                     final long timeStart = System.currentTimeMillis();
                     newTask()
-                            .declareVar(stringSequence)
+
                             .travelInTime("" + time)
-                            .lookup("" + id)
-                            .then(ifNotEmptyThen(
+                            .inject(idsTolook)
+                            .map(
                                     newTask()
-                                            .setAsVar("node")
-                                            .traverse(NODE_RANDOM_CHAR)
-                                            .addToVar(stringSequence)
-                                            .whileDo(ctx -> ctx.variable("node").get(0) != null,
+                                            .declareVar(stringSequence)
+                                            .lookup("{{result}}")
+                                            .then(ifNotEmptyThen(
                                                     newTask()
-                                                            .thenDo(ctx -> {
-                                                                        Node node = (Node) ctx.variable("node").get(0);
-                                                                        long childid = ((Relation) node.get(NODE_CHILDREN)).get(n);
-                                                                        ctx.setVariable("child", childid);
-                                                                        ctx.continueTask();
-                                                                    }
-                                                            )
-                                                            .lookup("{{child}}")
                                                             .setAsVar("node")
                                                             .traverse(NODE_RANDOM_CHAR)
                                                             .addToVar(stringSequence)
-                                            )
-                            ))
-                            .readVar(stringSequence)
+                                                            .whileDo(ctx -> ctx.variable("node").get(0) != null,
+                                                                    newTask()
+                                                                            .thenDo(ctx -> {
+                                                                                        Node node = (Node) ctx.variable("node").get(0);
+                                                                                        long childid = ((Relation) node.get(NODE_CHILDREN)).get(n);
+                                                                                        ctx.setVariable("child", childid);
+                                                                                        ctx.continueTask();
+                                                                                    }
+                                                                            )
+                                                                            .lookup("{{child}}")
+                                                                            .setAsVar("node")
+                                                                            .traverse(NODE_RANDOM_CHAR)
+                                                                            .addToVar(stringSequence)
+                                                            )
+                                            ))
+                                            .readVar(stringSequence)
+                            )
                             .execute(_graph,
-                                    result -> {
-                                        String s = "";
-                                        if (result != null) {
-                                            for (int i = 0; i < result.size(); i++) {
-                                                s += (String) result.get(i);
+                                    taskResult -> {
+                                        if (taskResult.exception() != null)
+                                            taskResult.exception().printStackTrace();
+
+                                        String[] result = new String[idsTolook.length];
+                                        Arrays.fill(result,"");
+                                        if (taskResult != null) {
+                                            for (int i = 0; i < taskResult.size(); i++) {
+                                                TaskResult subTaskResult = (TaskResult) taskResult.get(i);
+                                                for (int j = 0; j < subTaskResult.size(); j++) {
+                                                    result[i] += (String) subTaskResult.get(j);
+                                                }
                                             }
                                         }
-                                        String finalS = s;
                                         _graph.disconnect(
                                                 off -> {
                                                     final long timeEnd = System.currentTimeMillis();
                                                     final long timetoProcess = timeEnd - timeStart;
                                                     System.out.println(timetoProcess + " ms");
-                                                    callback.on(finalS);
+                                                    callback.on(result);
                                                 });
                                     });
                 }
@@ -289,6 +311,7 @@ public class GreycatGraph implements BenchGraph {
 
     }
 
+    @SuppressWarnings("Duplicates")
     public static void main(String[] args) throws InterruptedException {
 
         //Parameters
@@ -328,23 +351,23 @@ public class GreycatGraph implements BenchGraph {
                             "grey/grey_", memorySize, saveEvery,
                             new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
 
-                   // grey.constructGraph(result -> countDownLatch.countDown());
-                    grey.sumOfChildren(95, 1500, new Callback<Integer>() {
+                    // grey.constructGraph(result -> countDownLatch.countDown());
+                    grey.sumOfChildren(new int[]{11, 10}, 1500, new Callback<int[]>() {
                         @Override
-                        public void on(Integer integer) {
+                        public void on(int[] integer) {
 
                             countDownLatch.countDown();
-                            System.out.println(integer);
+                            System.out.println(Arrays.toString(integer));
                         }
                     });
-                    /**grey.buildStringOfNChildren(11, 5, 1500, new Callback<String>() {
+                    grey.buildStringOfNChildren(new int[]{11, 10}, 5, 1500, new Callback<String[]>() {
                         @Override
-                        public void on(String s) {
+                        public void on(String[] s) {
 
                             countDownLatch.countDown();
-                            System.out.println(s);
+                            System.out.println(Arrays.toString(s));
                         }
-                    });*/
+                    });
                     countDownLatch.await();
                 }
             }

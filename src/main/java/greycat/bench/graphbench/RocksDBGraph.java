@@ -14,6 +14,7 @@ import org.rocksdb.RocksDBException;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -56,12 +57,9 @@ public class RocksDBGraph extends GreycatGraph {
                     .setCompressionType(CompressionType.SNAPPY_COMPRESSION);
             RocksDB db = RocksDB.open(options, _path + "/current");
 
-            internal_ConstructGraph(db, new Callback<Boolean>() {
-                @Override
-                public void on(Boolean result) {
-                    db.close();
-                    callback.on(result);
-                }
+            internal_ConstructGraph(db, result -> {
+                db.close();
+                callback.on(result);
             });
         } catch (RocksDBException e) {
             e.printStackTrace();
@@ -89,36 +87,41 @@ public class RocksDBGraph extends GreycatGraph {
 
     @SuppressWarnings("Duplicates")
     @Override
-    public void sumOfChildren(int id, int time, Callback<Integer> callback) {
+    public void sumOfChildren(int[] idsToLook, int time, Callback<int[]> callback) {
         RocksDB db = null;
         int children = HashHelper.hash(NODE_CHILDREN);
         int value = HashHelper.hash(NODE_VALUE);
-        int sum = 0;
+        int[] sums = new int[idsToLook.length];
         try {
             db = RocksDB.openReadOnly(_path + "/" + findClosestTime(time));
-            List<Integer> ids = new ArrayList<>();
-            ids.add(id);
-            while (ids.size() != 0) {
-                StateChunckWrapper[] stw = loadNodes(db, ids);
-                ids.clear();
-                for (int i = 0; i < stw.length; i++) {
-                    StateChunckWrapper node = stw[i];
-                    int indexOfValue = getArrayIndex(node.getKeys(), value);
-                    int indexOfChildren = getArrayIndex(node.getKeys(), children);
-                    if (indexOfChildren != -1) {
-                        long[] childrenArray = (long[]) node.getValues()[indexOfChildren];
-                        for (int j = 0; j < childrenArray.length; j++) {
-                            ids.add((int) childrenArray[j]);
+
+            for (int k = 0; k < idsToLook.length; k++) {
+                int sum = 0;
+                List<Integer> ids = new ArrayList<>();
+                ids.add(idsToLook[k]);
+                while (ids.size() != 0) {
+                    StateChunckWrapper[] stw = loadNodes(db, ids);
+                    ids.clear();
+                    for (int i = 0; i < stw.length; i++) {
+                        StateChunckWrapper node = stw[i];
+                        int indexOfValue = getArrayIndex(node.getKeys(), value);
+                        int indexOfChildren = getArrayIndex(node.getKeys(), children);
+                        if (indexOfChildren != -1) {
+                            long[] childrenArray = (long[]) node.getValues()[indexOfChildren];
+                            for (int j = 0; j < childrenArray.length; j++) {
+                                ids.add((int) childrenArray[j]);
+                            }
                         }
+                        sum += (int) node.getValues()[indexOfValue];
                     }
-                    sum += (int) node.getValues()[indexOfValue];
                 }
+                sums[k] = sum;
             }
             db.close();
         } catch (RocksDBException e) {
             e.printStackTrace();
         } finally {
-            callback.on(sum);
+            callback.on(sums);
         }
     }
 
@@ -157,35 +160,39 @@ public class RocksDBGraph extends GreycatGraph {
 
     @SuppressWarnings("Duplicates")
     @Override
-    public void buildStringOfNChildren(int id, int n, int time, Callback<String> callback) {
+    public void buildStringOfNChildren(int[] idsToLook, int n, int time, Callback<String[]> callback) {
         RocksDB db = null;
         int children = HashHelper.hash(NODE_CHILDREN);
         int rc = HashHelper.hash(NODE_RANDOM_CHAR);
-        String sequence = "";
+        String[] sequences = new String[idsToLook.length];
         try {
             db = RocksDB.openReadOnly(_path + "/" + findClosestTime(time));
-            List<Integer> ids = new ArrayList<>();
-            ids.add(id);
-            while (ids.size() != 0) {
-                StateChunckWrapper[] stw = loadNodes(db, ids);
-                ids.clear();
-                for (int i = 0; i < stw.length; i++) {
-                    StateChunckWrapper node = stw[i];
-                    int indexOfRC = getArrayIndex(node.getKeys(), rc);
-                    int indexOfChildren = getArrayIndex(node.getKeys(), children);
-                    if (indexOfChildren != -1) {
-                        long[] childrenArray = (long[]) node.getValues()[indexOfChildren];
-                        if (childrenArray.length > n)
-                            ids.add((int) childrenArray[n]);
+            for (int k = 0; k < idsToLook.length; k++) {
+                String sequence = "";
+                List<Integer> ids = new ArrayList<>();
+                ids.add(idsToLook[k]);
+                while (ids.size() != 0) {
+                    StateChunckWrapper[] stw = loadNodes(db, ids);
+                    ids.clear();
+                    for (int i = 0; i < stw.length; i++) {
+                        StateChunckWrapper node = stw[i];
+                        int indexOfRC = getArrayIndex(node.getKeys(), rc);
+                        int indexOfChildren = getArrayIndex(node.getKeys(), children);
+                        if (indexOfChildren != -1) {
+                            long[] childrenArray = (long[]) node.getValues()[indexOfChildren];
+                            if (childrenArray.length > n)
+                                ids.add((int) childrenArray[n]);
+                        }
+                        sequence += (String) node.getValues()[indexOfRC];
                     }
-                    sequence += (String) node.getValues()[indexOfRC];
                 }
+                sequences[k] = sequence;
             }
             db.close();
         } catch (RocksDBException e) {
             e.printStackTrace();
         } finally {
-            callback.on(sequence);
+            callback.on(sequences);
         }
     }
 
@@ -231,21 +238,15 @@ public class RocksDBGraph extends GreycatGraph {
                     // grey.constructGraph(result -> countDownLatch.countDown());
                     //grey.findClosestTime(1500);
                     //countDownLatch.countDown();
-                    grey.sumOfChildren(11, 1500, new Callback<Integer>() {
-                        @Override
-                        public void on(Integer integer) {
+                    grey.sumOfChildren(new int[]{11,10}, 1500, integer -> {
 
-                            countDownLatch.countDown();
-                            System.out.println(integer);
-                        }
+                        countDownLatch.countDown();
+                        System.out.println(Arrays.toString(integer));
                     });
-                    grey.buildStringOfNChildren(11, 5, 1500, new Callback<String>() {
-                        @Override
-                        public void on(String s) {
+                    grey.buildStringOfNChildren(new int[]{11,10}, 5, 1500, s -> {
 
-                            countDownLatch.countDown();
-                            System.out.println(s);
-                        }
+                        countDownLatch.countDown();
+                        System.out.println(Arrays.toString(s));
                     });
                     countDownLatch.await();
                 }
