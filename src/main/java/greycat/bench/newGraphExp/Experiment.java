@@ -9,7 +9,7 @@ import greycat.chunk.StateChunk;
 import greycat.internal.heap.HeapBuffer;
 import greycat.plugin.SchedulerAffinity;
 import greycat.rocksdb.RocksDBStorage;
-import greycat.scheduler.TrampolineScheduler;
+import greycat.scheduler.HybridScheduler;
 import greycat.struct.Buffer;
 import greycat.struct.BufferIterator;
 import greycat.struct.Relation;
@@ -87,7 +87,7 @@ public class Experiment {
         this._graph = new GraphBuilder()
                 .withStorage(new RocksDBStorage(pathToGrey + graphGenerator.toString()))
                 .withMemorySize(memorySize)
-                .withScheduler(new TrampolineScheduler())
+                .withScheduler(new HybridScheduler())
                 .build();
 
         this._gGen = graphGenerator;
@@ -102,8 +102,6 @@ public class Experiment {
         }
         File targetDB = new File(location, "data");
         targetDB.mkdirs();
-        //this._saveEvery = (memorySize * 10 *_gGen.get_nbSplit() ) / (_gGen.get_nbNodes() * _gGen.get_percentageOfModification() + 1) - 1;
-
     }
 
 
