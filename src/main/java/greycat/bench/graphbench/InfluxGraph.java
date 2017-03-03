@@ -1,6 +1,9 @@
 package greycat.bench.graphbench;
 
-import greycat.*;
+import greycat.Callback;
+import greycat.Graph;
+import greycat.GraphBuilder;
+import greycat.Node;
 import greycat.bench.graphgen.BasicGraphGenerator;
 import greycat.bench.graphgen.GraphGenerator;
 import greycat.rocksdb.RocksDBStorage;
@@ -16,7 +19,6 @@ import org.influxdb.dto.QueryResult;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -39,10 +41,9 @@ public class InfluxGraph implements BenchGraph {
 
     public void constructGraph(Callback<Boolean> callback) {
 
-        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
-        influxDB.deleteDatabase(_gGen.toString());
+        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8085");
 
-        final long timeStart = System.currentTimeMillis();
+        influxDB.deleteDatabase(_gGen.toString());
 
         int start = _gGen.getOffset();
         int end = _gGen.getOffset() + _gGen.get_nbNodes() - 1;
@@ -146,7 +147,7 @@ public class InfluxGraph implements BenchGraph {
 
     @Override
     public void sumOfChildren(int[] idsToLook, int time, Callback<int[]> callback) {
-        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
+        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8085");
         String db = _gGen.toString();
 
         int[] sums = new int[idsToLook.length];
@@ -185,7 +186,7 @@ public class InfluxGraph implements BenchGraph {
     @Override
     public void buildStringOfNChildren(int[] idsToLook, int n, int time, Callback<String[]> callback) {
         if (n < 0 || n > 9) throw new RuntimeException("n must be between 0 and 9");
-        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8086");
+        InfluxDB influxDB = InfluxDBFactory.connect("http://127.0.0.1:8085");
         String db = _gGen.toString();
 
         String[] sequences = new String[idsToLook.length];
@@ -245,15 +246,15 @@ public class InfluxGraph implements BenchGraph {
         for (int k = 0; k < nbSplit.length; k++) {
             for (int i = 0; i < nbNodes.length; i++) {
                 for (int j = 0; j < percentOfModification.length; j++) {
-                    CountDownLatch loginLatch = new CountDownLatch(2);
+                    //CountDownLatch loginLatch = new CountDownLatch(2);
                     InfluxGraph influx = new InfluxGraph("grey/grey_", memorySize, new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[0], 0, 3));
                     influx.constructGraph(new Callback<Boolean>() {
                         @Override
                         public void on(Boolean result) {
-                            loginLatch.countDown();
+                            System.out.println("done!");
                         }
                     });
-                    influx.sumOfChildren(new int[]{11,10}, 1500, new Callback<int[]>() {
+                    /**influx.sumOfChildren(new int[]{11,10}, 1500, new Callback<int[]>() {
                         @Override
                         public void on(int[] integer) {
                             loginLatch.countDown();
@@ -267,7 +268,7 @@ public class InfluxGraph implements BenchGraph {
                             System.out.println(Arrays.toString(s));
                         }
                     });
-                    loginLatch.await();
+                    loginLatch.await();*/
                 }
             }
         }

@@ -52,6 +52,16 @@ public class BasicGraphGenerator implements GraphGenerator {
             throw new RuntimeException("startposition to close to the number of nodes");
     }
 
+    @Override
+    public int get_nbInsert() {
+        return _nbInsert;
+    }
+
+    @Override
+    public int get_percentageOfModification() {
+        return _percentageOfModification;
+    }
+
     public Operations nextTimeStamp() {
         Operations op = atTimeStamp(_currentTimestamp);
         _currentTimestamp++;

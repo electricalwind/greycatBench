@@ -25,4 +25,7 @@ public interface GraphGenerator {
      */
     public int get_nbNodes();
 
+    public int get_nbInsert();
+
+    public int get_percentageOfModification();
 }

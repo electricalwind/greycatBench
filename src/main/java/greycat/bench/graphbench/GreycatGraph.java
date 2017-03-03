@@ -10,7 +10,6 @@ import greycat.struct.Relation;
 import org.rocksdb.RocksDB;
 
 import java.util.Arrays;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static greycat.Tasks.newTask;
@@ -51,8 +50,6 @@ public class GreycatGraph implements BenchGraph {
 
 
     protected void internal_ConstructGraph(RocksDB dbSnap, Callback<Boolean> callback) {
-        final long timeStart = System.currentTimeMillis();
-
         final String graphGenTimeVar = "time";
         final String operationVar = "operation";
         final String valueVar = "value";
@@ -71,7 +68,6 @@ public class GreycatGraph implements BenchGraph {
                             ctx.setVariable(operationVar, _gGen.nextTimeStamp());
                             ctx.continueTask();
                         })
-
                         .readGlobalIndex(ENTRY_POINT_INDEX)
                         .then(ifEmptyThen(
                                 newTask()
@@ -144,7 +140,7 @@ public class GreycatGraph implements BenchGraph {
                                                         )
 
                                                         .ifThen(ctx -> dbSnap != null,
-                                                                newTask().pipe(RockDBSnapshot.snapshot(dbSnap, ((RocksDBGraph) this).get_path())))
+                                                                newTask().pipe(RockDBSnapshot.snapshot(dbSnap, this.get_path())))
 
                                                         .thenDo(
                                                                 ctx ->
@@ -172,9 +168,6 @@ public class GreycatGraph implements BenchGraph {
                             public void on(TaskResult result) {
                                 if (result.exception() != null)
                                     result.exception().printStackTrace();
-                                final long timeEnd = System.currentTimeMillis();
-                                final long timetoProcess = timeEnd - timeStart;
-                                System.out.println(_gGen.toString() + " " + timetoProcess + " ms");
                                 _graph.disconnect(new Callback<Boolean>() {
                                     @Override
                                     public void on(Boolean result) {
@@ -246,7 +239,6 @@ public class GreycatGraph implements BenchGraph {
 
         _graph.connect(
                 on -> {
-                    final long timeStart = System.currentTimeMillis();
                     newTask()
 
                             .travelInTime("" + time)
@@ -293,12 +285,7 @@ public class GreycatGraph implements BenchGraph {
                                             }
                                         }
                                         _graph.disconnect(
-                                                off -> {
-                                                    final long timeEnd = System.currentTimeMillis();
-                                                    final long timetoProcess = timeEnd - timeStart;
-                                                    System.out.println(timetoProcess + " ms");
-                                                    callback.on(result);
-                                                });
+                                                off -> callback.on(result));
                                     });
                 }
         );
@@ -340,33 +327,34 @@ public class GreycatGraph implements BenchGraph {
                     int saveEvery = (memorySize * 10 * nbSplit[k]) / (nbNodes[i] * percentOfModification[j] + 1) - 1;
 
                     if (percentOfModification[j] == 0 && k != 0) break;
-                    CountDownLatch countDownLatch = new CountDownLatch(1);
+                    //CountDownLatch countDownLatch = new CountDownLatch(1);
                     GreycatGraph grey = new GreycatGraph(
                             "grey/grey_", memorySize, saveEvery,
                             new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3));
 
-                    // grey.constructGraph(result -> countDownLatch.countDown());
-                    grey.sumOfChildren(new int[]{11, 10}, 1500, new Callback<int[]>() {
-                        @Override
-                        public void on(int[] integer) {
+                    grey.constructGraph(result -> System.out.println("done!"));
+                    /**grey.sumOfChildren(new int[]{11, 10}, 1500, new Callback<int[]>() {
+                    @Override public void on(int[] integer) {
 
-                            countDownLatch.countDown();
-                            System.out.println(Arrays.toString(integer));
-                        }
+                    countDownLatch.countDown();
+                    System.out.println(Arrays.toString(integer));
+                    }
                     });
-                    grey.buildStringOfNChildren(new int[]{11, 10}, 5, 1500, new Callback<String[]>() {
-                        @Override
-                        public void on(String[] s) {
+                     grey.buildStringOfNChildren(new int[]{11, 10}, 5, 1500, new Callback<String[]>() {
+                    @Override public void on(String[] s) {
 
-                            countDownLatch.countDown();
-                            System.out.println(Arrays.toString(s));
-                        }
-                    });
-                    countDownLatch.await();
+                    countDownLatch.countDown();
+                    System.out.println(Arrays.toString(s));
+                    }
+                    });*/
+                   // countDownLatch.await();
                 }
             }
         }
     }
 
 
+    public String get_path() {
+        return null;
+    }
 }

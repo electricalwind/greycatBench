@@ -56,6 +56,7 @@ public class RockDBSnapshot {
                         }
                     }
 
+                    buffer.free();
                     WriteOptions options = new WriteOptions();
                     options.setSync(false);
                     try {

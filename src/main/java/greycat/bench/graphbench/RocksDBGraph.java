@@ -14,10 +14,8 @@ import org.rocksdb.RocksDBException;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 
 import static greycat.bench.BenchConstants.*;
 
@@ -45,6 +43,7 @@ public class RocksDBGraph extends GreycatGraph {
         targetDB.mkdirs();
     }
 
+    @Override
     public String get_path() {
         return _path;
     }
@@ -230,25 +229,23 @@ public class RocksDBGraph extends GreycatGraph {
                     int saveEvery = (memorySize * 10 * nbSplit[k]) / (nbNodes[i] * percentOfModification[j] + 1) - 1;
 
                     if (percentOfModification[j] == 0 && k != 0) break;
-                    CountDownLatch countDownLatch = new CountDownLatch(2);
+                    //CountDownLatch countDownLatch = new CountDownLatch(2);
                     RocksDBGraph grey = new RocksDBGraph(
                             "grey/grey_", memorySize, saveEvery,
                             new BasicGraphGenerator(nbNodes[i], percentOfModification[j], nbSplit[k], nbModification[i], startPosition, 3), "snap/");
 
-                    // grey.constructGraph(result -> countDownLatch.countDown());
-                    //grey.findClosestTime(1500);
-                    //countDownLatch.countDown();
-                    grey.sumOfChildren(new int[]{11,10}, 1500, integer -> {
+                    grey.constructGraph(on -> System.out.println("done!"));
+                   /** grey.sumOfChildren(new int[]{11, 10}, 1500, integer -> {
 
                         countDownLatch.countDown();
                         System.out.println(Arrays.toString(integer));
                     });
-                    grey.buildStringOfNChildren(new int[]{11,10}, 5, 1500, s -> {
+                    grey.buildStringOfNChildren(new int[]{11, 10}, 5, 1500, s -> {
 
                         countDownLatch.countDown();
                         System.out.println(Arrays.toString(s));
                     });
-                    countDownLatch.await();
+                    countDownLatch.await();*/
                 }
             }
         }
